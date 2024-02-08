@@ -1,0 +1,46 @@
+CREATE FUNCTION [dbo].[seperate] (@word varchar(8000), @bracket char(1))
+ 
+RETURNS @tempTable TABLE (items varchar(8000)) --max 8000 
+ 
+AS
+ 
+BEGIN
+ 
+DECLARE @count int
+ 
+DECLARE @resulttable varchar(8000)
+ 
+SELECT @count = 1
+ 
+IF LEN(@word)<1 OR @word IS NULL RETURN
+ 
+WHILE @count != 0
+ 
+BEGIN
+ 
+SET @count = CHARINDEX(@bracket, @word)
+ 
+IF @count !=0
+ 
+SET @resulttable = LEFT(@word, @count-1 )
+ 
+ELSE
+ 
+SET @resulttable = @word
+ 
+IF (LEN(@resulttable) > 0)
+ 
+INSERT INTO @tempTable (items) VALUES (@resulttable)
+ 
+SET @word = RIGHT(@word, LEN(@word) - @count)
+ 
+IF LEN(@word) = 0 BREAK
+ 
+END
+ 
+RETURN
+ 
+END
+GO
+
+

@@ -1,0 +1,26 @@
+ALTER FUNCTION [dbo].[fn_VM_Yonetici_Personel_Listesi]
+( @YoneticiID INT)
+
+RETURNS TABLE 
+AS
+RETURN 
+(
+
+with liste as (
+    select   UserTableID, Personel, Yonetici as topparent
+    from    VM_KULLANICI_PARAMETRELERI
+    WHERE Yonetici = @YoneticiID
+    union all
+    select  child.UserTableID,child.Personel, child.Yonetici
+    from    VM_KULLANICI_PARAMETRELERI child
+    join    liste parent
+    on      parent.Personel = child.Yonetici
+)
+
+select  UserTableID,Personel
+from    liste 
+)
+
+
+
+GO

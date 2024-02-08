@@ -1,0 +1,90 @@
+
+-- @Author: Gökhan Yılmaz
+-- @Date: 03.06.2021
+-- @Desc: 
+
+--EXEC dbo.sp_N_ComparePeople 
+--	'1,2,3'
+--	,'Skills'	
+--	,''
+--	,''
+
+ALTER PROCEDURE [dbo].[sp_N_ComparePeople] 
+	@People	NVARCHAR(100) = ''
+	,@Type NVARCHAR(MAX) = ''
+	,@SubType NVARCHAR(MAX) = ''
+	,@SubType2 NVARCHAR(MAX) = ''
+AS
+
+DECLARE @SQL NVARCHAR(MAX) = ''
+DECLARE @CTitle NVARCHAR(MAX) = '',
+	@FactorTitle NVARCHAR(MAX) = ''
+
+DECLARE @TypeTitles NVARCHAR(MAX) = ''
+SELECT @TypeTitles += '[' + TRIM(Type) + '],' 
+FROM (SELECT DISTINCT Type FROM dbo.N_Person_Skill_Set AS NPSS WITH (NOLOCK) 
+	WHERE Type != '') AS A
+SELECT @TypeTitles = IIF(LEN(@TypeTitles)=0,'[Empty]',LEFT(@TypeTitles,LEN(@TypeTitles)-1))
+
+DECLARE @SubTypeTitles NVARCHAR(MAX) = ''
+SELECT @SubTypeTitles += '[' + TRIM(SubType) + '],' 
+FROM (SELECT DISTINCT SubType FROM dbo.N_Person_Skill_Set AS NPSS WITH (NOLOCK) 
+	WHERE Type = @Type AND SubType != '') AS A
+SELECT @SubTypeTitles = IIF(LEN(@SubTypeTitles)=0,'[Empty]',LEFT(@SubTypeTitles,LEN(@SubTypeTitles)-1))
+
+DECLARE @SubType2Titles NVARCHAR(MAX) = ''
+SELECT @SubType2Titles += '[' + TRIM(TypeSub2) + '],' 
+FROM (SELECT DISTINCT TypeSub2 FROM dbo.N_Person_Skill_Set AS NPSS WITH (NOLOCK) 
+	WHERE Type = @Type AND SubType = @SubType AND TypeSub2 != '') AS A
+SELECT @SubType2Titles = IIF(LEN(@SubType2Titles)=0,'[Empty]',LEFT(@SubType2Titles,LEN(@SubType2Titles)-1))
+
+DECLARE @KPITitles NVARCHAR(MAX) = ''
+SELECT @KPITitles += '[' + TRIM(KPI) + '],' 
+FROM (SELECT DISTINCT KPI FROM dbo.N_Person_Skill_Set AS NPSS WITH (NOLOCK) 
+	WHERE Type = @Type AND SubType = @SubType AND TypeSub2 = @SubType2 AND KPI != '') AS A
+SELECT @KPITitles = IIF(LEN(@KPITitles)=0,'[Empty]',LEFT(@KPITitles,LEN(@KPITitles)-1))
+
+SELECT @CTitle = CASE 
+	WHEN @Type = '' AND @SubType = '' AND @SubType2 = '' THEN @TypeTitles
+	WHEN @Type != '' AND @SubType = '' AND @SubType2 = '' THEN @SubTypeTitles
+	WHEN @Type != '' AND @SubType != '' AND @SubType2 = '' THEN @SubType2Titles
+	WHEN @Type != '' AND @SubType != '' AND @SubType2 != '' THEN @KPITitles
+	ELSE '' END
+SELECT @FactorTitle = CASE 
+	WHEN @Type = '' AND @SubType = '' AND @SubType2 = '' THEN 'Type'
+	WHEN @Type != '' AND @SubType = '' AND @SubType2 = '' THEN 'SubType'
+	WHEN @Type != '' AND @SubType != '' AND @SubType2 = '' THEN 'TypeSub2'
+	WHEN @Type != '' AND @SubType != '' AND @SubType2 != '' THEN 'KPI'
+	ELSE '' END
+
+DECLARE @Columns NVARCHAR(MAX) = ''
+SELECT @Columns += 'ISNULL('+items+',0) AS ' + items + ',' FROM dbo.[fn_split](@CTitle,',')
+SELECT @Columns = LEFT(@Columns,LEN(@Columns)-1)
+SET @SQL = '
+SELECT People, '+@Columns+' FROM (
+	SELECT * FROM (
+		SELECT
+			(SELECT NPM.First_Name+'' ''+NPM.Last_Name 
+				FROM dbo.N_Person_Match AS NPM WITH (NOLOCK)
+				WHERE  NPSS.Person = NPM.UserTableID) AS People,
+			NPSS.'+@FactorTitle+' AS Factor,
+			ISNULL(SUM(NPSS.Score),0) AS [Score - Status]
+		FROM dbo.N_Person_Skill_Set AS NPSS WITH (NOLOCK)
+		WHERE NPSS.Person IN (SELECT * FROM dbo.[fn_split]('''+@People+''','',''))
+			AND (NPSS.Type = '''+@Type+''' OR '''+@Type+''' = '''')
+			AND (NPSS.SubType = '''+@SubType+''' OR '''+@SubType+''' = '''')
+			AND (NPSS.TypeSub2 = '''+@SubType2+''' OR '''+@SubType2+''' = '''')
+		GROUP BY
+			NPSS.Person,
+			NPSS.'+@FactorTitle+'
+	) AS TABLOM
+	PIVOT
+	(
+		SUM([Score - Status])
+		FOR Factor
+		IN ('+@CTitle+')
+	) AS PIVOTTABLOM
+) AS ResultTable'
+
+EXEC (@SQL)
+

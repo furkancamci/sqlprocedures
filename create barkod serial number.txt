@@ -1,0 +1,38 @@
+--SELECT [dbo].[fn_XP_MCM_IsEmriYeniSeriNo](4804)
+ALTER FUNCTION [dbo].[fn_XP_MCM_IsEmriYeniSeriNo]
+(
+	@ProjeGorevID INT
+)
+RETURNS NVARCHAR(20)
+AS
+BEGIN
+	DECLARE @SonSeriNo NVARCHAR(20),
+			@ArtirilacakSira INT,
+			@Sonuc NVARCHAR(20),
+			@StokAltGrupKodu VARCHAR(5),
+			@StokAltGrupAdi VARCHAR(3)
+			
+	SELECT @StokAltGrupKodu = sta_kod, @StokAltGrupAdi = UPPER(SUBSTRING(sta_isim,1,3)) 
+	FROM XP_PROJE_GOREVLER PG WITH(NOLOCK)
+	LEFT JOIN MikroDB_V16_MCM.dbo.STOKLAR WITH(NOLOCK) ON sto_kod COLLATE TURKISH_CI_AS = PG.StokKodu
+	LEFT JOIN MikroDB_V16_MCM.dbo.STOK_ALT_GRUPLARI WITH(NOLOCK) ON sta_ana_grup_kod = sto_anagrup_kod AND sta_kod = sto_altgrup_kod
+	WHERE UserTableID = @ProjeGorevID
+
+	SET @SonSeriNo = ( SELECT MAX(SeriNo) FROM XP_PROJE_GOREVLER WITH (NOLOCK) WHERE SeriNo LIKE ISNULL(@StokAltGrupKodu,'')+ISNULL(@StokAltGrupAdi,'')+'%' )
+
+	IF @SonSeriNo IS NULL OR @SonSeriNo = ''
+	BEGIN
+		SET @Sonuc = ISNULL(@StokAltGrupKodu,'000')+ISNULL(@StokAltGrupAdi,'XPD')+'00001'
+
+		RETURN @Sonuc
+	END
+
+	SET @ArtirilacakSira = CONVERT(VARCHAR,CONVERT(INT, SUBSTRING(@SonSeriNo,7,LEN(@SonSeriNo)-1)))+ 1
+	--select @Seed
+	--select @IncrementedValue
+	SET @Sonuc = ( SELECT CONVERT(VARCHAR, SUBSTRING(@SonSeriNo,1,LEN(@SonSeriNo)-LEN(@ArtirilacakSira))) + Convert(varchar,@ArtirilacakSira) )
+	--SELECT @Sonuc
+
+    RETURN @Sonuc
+
+END
